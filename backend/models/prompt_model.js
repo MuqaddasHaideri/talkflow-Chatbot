@@ -8,7 +8,6 @@ const prompt = new mongoose.Schema({
     generatedText:{
         type: String,
         required : true,
-
     }
 
 }, { timestamps : true });
