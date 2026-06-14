@@ -25,4 +25,5 @@ console.log('MONGO_URL is not defined');
   }catch(err){
 console.log("error conntecting db",err)
   }
+  
 }
