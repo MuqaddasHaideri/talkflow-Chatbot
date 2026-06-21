@@ -10,5 +10,6 @@ const prompt = new mongoose.Schema({
     //     required : true,
     // }
 //time
+
 }, { timestamps : true });
 export default mongoose.model('generatedText', prompt);
