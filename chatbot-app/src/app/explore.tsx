@@ -19,6 +19,7 @@ export default function TabTwoScreen() {
   };
   const theme = useTheme();
 
+
   const contentPlatformStyle = Platform.select({
     android: {
       paddingTop: insets.top,
