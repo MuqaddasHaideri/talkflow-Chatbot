@@ -2,7 +2,6 @@
 import mongoose from 'mongoose';
 //a package used to load environment variables from a .env file.
 import dotenv from "dotenv"
-
 //activates dotenv
 dotenv.config();
 //This gets the database URL from environment variables. process.env = all environment variables,MONGO_URL = variable name you defined in .env
