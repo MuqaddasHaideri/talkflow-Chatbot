@@ -6,7 +6,6 @@ import dotenv from "dotenv"
 dotenv.config();
 //This gets the database URL from environment variables. process.env = all environment variables,MONGO_URL = variable name you defined in .env
  const MONGO_URL = process.env.MONGO_URL
-
 //Check if URL exists
 if (!MONGO_URL) {
 console.log('MONGO_URL is not defined');
