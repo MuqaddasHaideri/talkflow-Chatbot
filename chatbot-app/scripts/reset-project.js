@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+⁸#!/usr/bin/env node
 
 /**
  * This script is used to reset the project to a blank state.
@@ -52,7 +52,7 @@ const moveDirectories = async (userInput) => {
     if (userInput === "y") {
       // Create the app-example directory
       await fs.promises.mkdir(exampleDirPath, { recursive: true });
-      console.log(`📁 /${exampleDir} directory created.`);
+      console.log(`/${exampleDir} directory created.`);
     }
 
     // Move old directories to new app-example directory or delete them
