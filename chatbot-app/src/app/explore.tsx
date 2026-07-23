@@ -16,8 +16,6 @@ export default function TabTwoScreen() {
     bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
   };
   const theme = useTheme();
-
-
   const contentPlatformStyle = Platform.select({
     android: {
       paddingTop: insets.top,
