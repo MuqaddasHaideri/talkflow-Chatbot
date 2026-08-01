@@ -1,5 +1,4 @@
 import mongoose, { Schema } from "mongoose";
-
 const prompt = new mongoose.Schema({
     // username :{
     //     type : String,
