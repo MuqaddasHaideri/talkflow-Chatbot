@@ -9,7 +9,7 @@ import {
 
 const router = Router();
 
-router.use(isAuthenticated); //   authenticated user Protect all session routes
+router.use(isAuthenticated); 
 
 router.get('/', getSessions);
 router.post('/', createSession);
