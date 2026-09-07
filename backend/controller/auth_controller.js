@@ -8,7 +8,7 @@ import jwt from "jsonwebtoken";
 export const signupController = async (req, res) => {
   try {
     try {
-        const { email, password } = req.body;
+        const { username, email, password } = req.body;
     
         if (!email || !password) {
           return res.status(400).json({ error: 'Email and password are required.' });
@@ -22,7 +22,7 @@ export const signupController = async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(password, salt);
     
-        const user = await user_models.create({ email, passwordHash });
+        const user = await user_models.create({ username, email, passwordHash });
         const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
     
         res.status(201).json({ token, userId: user._id, email: user.email });

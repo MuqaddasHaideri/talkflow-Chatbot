@@ -1,3 +1,6 @@
+if (__DEV__) {
+  require("../reactotron");
+}
 import React, { useRef, useState } from 'react';
 import {
   View,
@@ -10,11 +13,12 @@ import {
   Platform,
   ScrollView,
   Animated,
-  ImageBackground
+  ImageBackground,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { signup } from '../services/apiConfig';
 
-// ---------- Floating Label Outline Input ----------
 interface FloatingInputProps {
   label: string;
   value: string;
@@ -23,7 +27,9 @@ interface FloatingInputProps {
   keyboardType?: 'default' | 'email-address';
   autoCapitalize?: 'none' | 'words' | 'sentences';
 }
+
 const BACKGROUND_IMAGE = require('../assets/images/background.jpg');
+
 const FloatingInput: React.FC<FloatingInputProps> = ({
   label,
   value,
@@ -57,51 +63,66 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
   );
 };
 
-// ---------- Auth Screen ----------
 export default function AuthScreen() {
   const [isLogin, setIsLogin] = useState(true);
-  const [isFlipping, setIsFlipping] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // Form state
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  // Form states separated
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
 
-  // 0 -> showing front (Login), 1 -> showing back (Sign Up)
+  const [signupUsername, setSignupUsername] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+
   const flipAnim = useRef(new Animated.Value(0)).current;
 
   const frontRotateY = flipAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '180deg'],
   });
+
   const backRotateY = flipAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['180deg', '360deg'],
   });
 
-  // Front fades/disables exactly at the halfway point so taps land on the
-  // correct face and neither side is tappable edge-on.
   const frontOpacity = flipAnim.interpolate({
-    inputRange: [0, 0.5, 0.50001, 1],
+    inputRange: [0, 0.5, 0.501, 1],
     outputRange: [1, 1, 0, 0],
   });
+
   const backOpacity = flipAnim.interpolate({
-    inputRange: [0, 0.49999, 0.5, 1],
+    inputRange: [0, 0.499, 0.5, 1],
     outputRange: [0, 0, 1, 1],
   });
 
   const handleFlip = () => {
-    if (isFlipping) return;
-    setIsFlipping(true);
     const toValue = isLogin ? 1 : 0;
-    Animated.timing(flipAnim, {
+    setIsLogin(!isLogin);
+    Animated.spring(flipAnim, {
       toValue,
-      duration: 650,
+      friction: 8,
+      tension: 10,
       useNativeDriver: true,
-    }).start(() => {
-      setIsLogin(!isLogin);
-      setIsFlipping(false);
-    });
+    }).start();
+  };
+
+  const handleSignUp = async () => {
+    if (!signupUsername || !signupEmail || !signupPassword) return;
+    try {
+      setLoading(true);
+      const response = await signup(signupUsername, signupEmail, signupPassword);
+      if (response.success) {
+        console.log(response.message);
+      } else {
+        console.error(response.error);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -117,7 +138,7 @@ export default function AuthScreen() {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.flipContainer}>
-              {/* FRONT — Login */}
+              {/* FRONT: Login */}
               <Animated.View
                 pointerEvents={isLogin ? 'auto' : 'none'}
                 style={[
@@ -125,7 +146,7 @@ export default function AuthScreen() {
                   styles.cardFace,
                   {
                     opacity: frontOpacity,
-                    transform: [{ perspective: 1200 }, { rotateY: frontRotateY }],
+                    transform: [{ perspective: 1000 }, { rotateY: frontRotateY }],
                   },
                 ]}
               >
@@ -134,15 +155,15 @@ export default function AuthScreen() {
                   <Text style={styles.subHeading}>Sign in to continue!</Text>
 
                   <FloatingInput
-                    label="Email ID"
-                    value={email}
-                    onChangeText={setEmail}
+                    label="Email or Username"
+                    value={loginEmail}
+                    onChangeText={setLoginEmail}
                     keyboardType="email-address"
                   />
                   <FloatingInput
                     label="Password"
-                    value={password}
-                    onChangeText={setPassword}
+                    value={loginPassword}
+                    onChangeText={setLoginPassword}
                     secureTextEntry
                   />
 
@@ -152,9 +173,9 @@ export default function AuthScreen() {
 
                   <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtnWrapper}>
                     <LinearGradient
-                      colors={['#2A2C5E', '#2A2C5E']}
-                      start={{ x: 0, y: 0.5 }}
-                      end={{ x: 1, y: 0.5 }}
+                      colors={['#393B73', '#2A2C5E']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
                       style={styles.primaryBtnGradient}
                     >
                       <Text style={styles.primaryBtnText}>Login</Text>
@@ -164,22 +185,21 @@ export default function AuthScreen() {
 
                 <View style={styles.footerContainer}>
                   <Text style={styles.footerText}>I'm a new user, </Text>
-                  <TouchableOpacity onPress={handleFlip} disabled={isFlipping}>
+                  <TouchableOpacity onPress={handleFlip}>
                     <Text style={styles.footerLink}>Sign Up</Text>
                   </TouchableOpacity>
                 </View>
               </Animated.View>
 
-              {/* BACK — Sign Up */}
+              {/* BACK: Sign Up */}
               <Animated.View
                 pointerEvents={isLogin ? 'none' : 'auto'}
                 style={[
                   styles.card,
                   styles.cardFace,
-                  styles.cardBack,
                   {
                     opacity: backOpacity,
-                    transform: [{ perspective: 1200 }, { rotateY: backRotateY }],
+                    transform: [{ perspective: 1000 }, { rotateY: backRotateY }],
                   },
                 ]}
               >
@@ -188,42 +208,48 @@ export default function AuthScreen() {
                   <Text style={styles.subHeading}>Sign up to get started!</Text>
 
                   <FloatingInput
-                    label="Full Name"
-                    value={fullName}
-                    onChangeText={setFullName}
+                    label="Username"
+                    value={signupUsername}
+                    onChangeText={setSignupUsername}
                     autoCapitalize="words"
                   />
                   <FloatingInput
-                    label="Email ID"
-                    value={email}
-                    onChangeText={setEmail}
+                    label="Email"
+                    value={signupEmail}
+                    onChangeText={setSignupEmail}
                     keyboardType="email-address"
                   />
                   <FloatingInput
                     label="Password"
-                    value={password}
-                    onChangeText={setPassword}
+                    value={signupPassword}
+                    onChangeText={setSignupPassword}
                     secureTextEntry
                   />
 
                   <TouchableOpacity
                     activeOpacity={0.85}
-                    style={[styles.primaryBtnWrapper, { marginTop: 6 }]}
+                    style={styles.primaryBtnWrapper}
+                    onPress={handleSignUp}
+                    disabled={loading}
                   >
                     <LinearGradient
-                      colors={['#2A2C5E', '#2A2C5E']}
-                      start={{ x: 0, y: 0.5 }}
-                      end={{ x: 1, y: 0.5 }}
+                      colors={['#393B73', '#2A2C5E']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
                       style={styles.primaryBtnGradient}
                     >
-                      <Text style={styles.primaryBtnText}>Sign Up</Text>
+                      {loading ? (
+                        <ActivityIndicator color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.primaryBtnText}>Sign Up</Text>
+                      )}
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
 
                 <View style={styles.footerContainer}>
                   <Text style={styles.footerText}>I'm already a member, </Text>
-                  <TouchableOpacity onPress={handleFlip} disabled={isFlipping}>
+                  <TouchableOpacity onPress={handleFlip}>
                     <Text style={styles.footerLink}>Sign In</Text>
                   </TouchableOpacity>
                 </View>
@@ -235,8 +261,6 @@ export default function AuthScreen() {
     </ImageBackground>
   );
 }
-
-const CARD_HEIGHT = 680;
 
 const styles = StyleSheet.create({
   mainContainer: {
@@ -253,38 +277,37 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: 24,
     paddingHorizontal: 16,
   },
   flipContainer: {
     width: '100%',
     maxWidth: 390,
-    height: CARD_HEIGHT,
+    minHeight: 560,
+    position: 'relative',
   },
   card: {
     width: '100%',
-    height: CARD_HEIGHT,
+    minHeight: 560,
     backgroundColor: '#FFFFFF',
-    borderRadius: 36,
+    borderRadius: 28,
     paddingHorizontal: 26,
-    paddingTop: 48,
+    paddingTop: 40,
     paddingBottom: 28,
     justifyContent: 'space-between',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.08,
-    shadowRadius: 24,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 6,
   },
-  // Both faces stack in the same spot; rotateY + backfaceVisibility does the flip.
   cardFace: {
     position: 'absolute',
     top: 0,
     left: 0,
+    right: 0,
+    bottom: 0,
     backfaceVisibility: 'hidden',
-  },
-  cardBack: {
-    // Starts pre-rotated so it faces away until the animation brings it around.
   },
   formContent: {
     width: '100%',
@@ -296,15 +319,15 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   subHeading: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
     color: '#9CA3AF',
     marginTop: 4,
-    marginBottom: 32,
+    marginBottom: 28,
   },
   inputContainer: {
     position: 'relative',
-    marginBottom: 20,
+    marginBottom: 18,
   },
   inputWrapper: {
     height: 52,
@@ -343,7 +366,7 @@ const styles = StyleSheet.create({
   forgotPassBtn: {
     alignSelf: 'flex-end',
     marginTop: -4,
-    marginBottom: 26,
+    marginBottom: 24,
   },
   forgotPassText: {
     fontSize: 12,
@@ -355,12 +378,11 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 10,
     overflow: 'hidden',
-    marginBottom: 14,
-    shadowColor: '#FF5E7E',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.28,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowColor: '#2A2C5E',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
   primaryBtnGradient: {
     flex: 1,
@@ -372,40 +394,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-  facebookBtn: {
-    width: '100%',
-    height: 50,
-    backgroundColor: '#EDF1F7',
-    borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  fbIconBadge: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    backgroundColor: '#3B5998',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fbIconText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-    marginTop: -1,
-  },
-  facebookBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#344767',
-  },
   footerContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: 20,
   },
   footerText: {
     fontSize: 13,
