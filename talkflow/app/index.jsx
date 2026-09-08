@@ -17,7 +17,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { signup } from '../services/apiConfig';
+import { signupUserApi, loginUserApi } from '../services/apiConfig';
 
 interface FloatingInputProps {
   label: string;
@@ -109,16 +109,28 @@ export default function AuthScreen() {
   };
 
   const handleSignUp = async () => {
+    console.log('Signing up...');
+    console.log(signupUsername, signupEmail, signupPassword);
     if (!signupUsername || !signupEmail || !signupPassword) return;
     try {
       setLoading(true);
-      const response = await signup(signupUsername, signupEmail, signupPassword);
-      if (response.success) {
-        console.log(response.message);
-      } else {
-        console.error(response.error);
-      }
+      const response = await signupUserApi(signupUsername, signupEmail, signupPassword);
+      console.log('Signed up:', response.email);
     } catch (error) {
+      console.error(error); 
+    } finally {
+      setLoading(false);
+    }
+  };
+  const handleLogin = async () => {
+    console.log('Logging in...');
+    console.log(loginEmail, loginPassword);
+    if (!loginEmail || !loginPassword) return;
+    try {
+      setLoading(true);
+      const response = await loginUserApi(loginEmail, loginPassword);
+    }
+    catch (error) {
       console.error(error);
     } finally {
       setLoading(false);
@@ -171,7 +183,9 @@ export default function AuthScreen() {
                     <Text style={styles.forgotPassText}>Forgot Password?</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtnWrapper}>
+                  <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtnWrapper}
+                  onPress={handleLogin}
+                  >
                     <LinearGradient
                       colors={['#393B73', '#2A2C5E']}
                       start={{ x: 0, y: 0 }}

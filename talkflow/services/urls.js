@@ -1,13 +1,7 @@
-const baseUrl = 'http://localhost:5001/api';
+export const API_BASE = 'http://192.168.0.101:5000/api';
 
-export const authUrls = {
-    signup: `${baseUrl}/auth/signup`,
-    login: `${baseUrl}/auth/login`,
-}
 
-export const sessionUrls = {
-    createSession: `${baseUrl}/sessions/create`,
-    getSessions: `${baseUrl}/sessions/get`,
-    updateSession: `${baseUrl}/sessions/update`,
-    deleteSession: `${baseUrl}/sessions/delete`,
+export const endpoints = {
+  login: "/auth/login",
+  signup: "/auth/signup"
 }

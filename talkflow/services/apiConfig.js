@@ -1,28 +1,46 @@
-import { authUrls } from "./urls";
+  import { API_BASE, endpoints } from "./urls";
 
-export const signup = async (username, email, password) => {
+const fetchApi = async (url, options = {}) => {
   try {
-    const response = await fetch(authUrls.signup, {
-      method: "POST",
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000); 
+
+    const response = await fetch(`${API_BASE}${url}`, {
+      ...options,
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
       },
-      body: JSON.stringify({ username, email, password }),
+      signal: controller.signal,
     });
 
+    clearTimeout(timeout);
+    
     const data = await response.json();
-
     if (!response.ok) {
-      // Create an error containing backend error details
-      const error = new Error(data.message || `Signup failed with status ${response.status}`);
-      error.status = response.status;
-      error.data = data;
-      throw error;
+      throw data?.message || 'Request failed';
     }
 
     return data;
+
   } catch (error) {
-    // Re-throws network errors and HTTP errors for caller handling
-    throw error;
+    if (error.name === 'AbortError') {
+      throw 'Request timeout';
+    }
+    throw error || 'Network Error';
   }
+};
+
+export const loginUserApi = async (email, password) => {
+  return fetchApi(endpoints.login, {
+    method: 'POST',
+    body: JSON.stringify({ email, password }), 
+  });
+};
+
+export const signupUserApi = async (username, email, password) => {
+  return fetchApi(endpoints.signup, {
+    method: 'POST',
+    body: JSON.stringify({ username, email, password }),
+  });
 };
