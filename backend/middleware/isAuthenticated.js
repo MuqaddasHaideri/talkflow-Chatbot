@@ -5,7 +5,7 @@ export const isAuthenticated = (req, res, next) => {
     // Get Authorization header
     const authHeader = req.headers.authorization;
 
-    // Check if Bearer token exists
+    // Checking if Bearer token exists
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
         message: "User not authenticated",
@@ -15,13 +15,11 @@ export const isAuthenticated = (req, res, next) => {
     // Extract token
     const token = authHeader.split(" ")[1];
 
-    // Verify token using THE SAME SECRET used during login
     const decoded = jwt.verify(
       token,
       process.env.JWT_SECRET
     );
 
-    // Store user information
     req.userId = decoded.userId;
     req.user = decoded;
 
