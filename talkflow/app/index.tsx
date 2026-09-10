@@ -18,7 +18,9 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { signupUserApi, loginUserApi } from '../services/apiConfig';
-
+import { router } from 'expo-router';
+import { useAppDispatch } from "../redux/hooks";
+import { login } from "../redux/auth";
 interface FloatingInputProps {
   label: string;
   value: string;
@@ -66,7 +68,7 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
 export default function AuthScreen() {
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
-
+  const dispatch = useAppDispatch();
   // Form states separated
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -129,6 +131,17 @@ export default function AuthScreen() {
     try {
       setLoading(true);
       const response = await loginUserApi(loginEmail, loginPassword);
+
+    const token = response.token;
+    const user = response.user;
+    console.log("token",token)
+    dispatch(
+      login({
+        token,
+        user,
+      })
+    );
+      router.push('/home');
     }
     catch (error) {
       console.error(error);
