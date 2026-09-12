@@ -17,25 +17,12 @@ export const shortenTitle = (text: string) => {
     : clean || "New Chat";
 };
 
-export const normalizeSession = (
-  session: any
-): Session => {
-  const id =
-    session?._id ||
-    session?.id ||
-    uid();
-
-  return {
-    id: String(id),
-
-    title:
-      session?.title ||
-      session?.name ||
-      "New Chat",
-
-    messages: [],
-  };
-};
+export const normalizeSession = (raw) => ({
+  id: raw._id || raw.id,
+  title: raw.title || "New Chat",
+  messages: raw.messages || [],
+  updatedAt: raw.updatedAt || new Date().toISOString(),
+});
 
 export const normalizeMessage = (
   message: any

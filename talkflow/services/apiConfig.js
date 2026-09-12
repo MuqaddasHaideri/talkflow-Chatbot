@@ -125,10 +125,9 @@ export const deleteSessionApi = async (
 /* =========================
    CHAT STREAM
 ========================= */
-
 export const streamChatMessageApi = async (
   sessionId,
-  message
+  text // rename from message to text for clarity
 ) => {
   // Get token from Redux
   const token = store.getState().auth.token;
@@ -151,7 +150,7 @@ export const streamChatMessageApi = async (
       },
 
       body: JSON.stringify({
-        message,
+        text, // Must match req.body.text in backend controller
       }),
     }
   );
@@ -162,7 +161,8 @@ export const streamChatMessageApi = async (
       .catch(() => null);
 
     throw new Error(
-      errorData?.message ||
+      errorData?.error || // Matches backend { error: '...' } response
+        errorData?.message ||
         "Failed to send chat message"
     );
   }

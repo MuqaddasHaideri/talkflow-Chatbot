@@ -37,9 +37,9 @@ export const streamChatMessage = async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-
+    res.setHeader('X-Accel-Buffering', 'no');
     const streamResult = await ai.models.generateContentStream({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: formattedContents,
     });
 

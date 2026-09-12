@@ -275,7 +275,7 @@ export default function ChatScreen() {
         await createSessionApi(
           "New Chat"
         );
-
+console.log("Response ===============",response)
       const rawSession =
         response?.session ||
         response?.data ||
@@ -386,198 +386,138 @@ export default function ChatScreen() {
   // ------------------------------------------------
   // UPDATE MESSAGES
   // ------------------------------------------------
-
   const updateActiveMessages = (
-    updater: (
-      messages: Message[]
-    ) => Message[]
+    updater: (messages: Message[]) => Message[]
   ) => {
     if (!activeSessionId) return;
-
+  
     setSessions((previous) =>
-      previous.map((session) =>
-        session.id ===
-        activeSessionId
-          ? {
-              ...session,
-              messages:
-                updater(
-                  session.messages
-                ),
-            }
-          : session
-      )
+      previous.map((session) => {
+        if (session.id !== activeSessionId) return session;
+  
+        const updatedMessages = updater(session.messages || []);
+        return {
+          ...session,
+          messages: updatedMessages,
+        };
+      })
     );
   };
-
   // ------------------------------------------------
   // STREAM CHAT
   // ------------------------------------------------
 
   const handleSend = async () => {
-    const text =
-      input.trim();
-
-    if (
-      !text ||
-      !activeSessionId ||
-      isSending
-    ) {
+    const text = input.trim();
+  
+    if (!text || !activeSessionId || isSending) {
       return;
     }
-
+  
     const userMessage: Message = {
       id: uid(),
       role: "user",
       text,
       time: nowLabel(),
     };
-
-    updateActiveMessages(
-      (messages) => [
-        ...messages,
-        userMessage,
-      ]
-    );
-
+  
+    updateActiveMessages((messages) => [...messages, userMessage]);
+  
     setSessions((previous) =>
       previous.map((session) =>
-        session.id ===
-          activeSessionId &&
-        session.title ===
-          "New Chat"
-          ? {
-              ...session,
-              title:
-                shortenTitle(text),
-            }
+        session.id === activeSessionId && session.title === "New Chat"
+          ? { ...session, title: shortenTitle(text) }
           : session
       )
     );
-
+  
     setInput("");
     setIsSending(true);
     setIsTyping(true);
-
+  
     try {
-      const response =
-        await streamChatMessageApi(
-          activeSessionId,
-          text
-        );
-
+      const response = await streamChatMessageApi(activeSessionId, text);
+  
       if (!response.body) {
-        throw new Error(
-          "Streaming is not supported by this response."
-        );
+        throw new Error("Streaming is not supported by this response.");
       }
-
-      const reader =
-        response.body.getReader();
-
-      const decoder =
-        new TextDecoder();
-
-      const aiMessageId =
-        uid();
-
+  
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      const aiMessageId = uid();
+  
       let aiText = "";
-
-      updateActiveMessages(
-        (messages) => [
-          ...messages,
-          {
-            id: aiMessageId,
-            role: "ai",
-            text: "",
-            time: nowLabel(),
-          },
-        ]
-      );
-
+      let buffer = "";
+  
+      updateActiveMessages((messages) => [
+        ...messages,
+        {
+          id: aiMessageId,
+          role: "ai",
+          text: "",
+          time: nowLabel(),
+        },
+      ]);
+  
       setIsTyping(false);
-
+  
       while (true) {
-        const {
-          done,
-          value,
-        } = await reader.read();
-
+        const { done, value } = await reader.read();
         if (done) break;
-
-        const chunk =
-          decoder.decode(
-            value,
-            {
-              stream: true,
-            }
+  
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+  
+        // Retain the trailing incomplete segment in the buffer
+        buffer = lines.pop() ?? "";
+  
+        for (const rawLine of lines) {
+          const line = rawLine.trim();
+          if (!line || !line.startsWith("data:")) continue;
+  
+          const dataContent = line.replace(/^data:\s*/, "").trim();
+          if (dataContent === "[DONE]") continue;
+  
+          let incomingChunk = "";
+  
+          try {
+            const parsed = JSON.parse(dataContent);
+            incomingChunk = parsed.text ?? "";
+          } catch {
+            // Fallback if the payload was emitted as plain text
+            incomingChunk = dataContent;
+          }
+  
+          if (!incomingChunk) continue;
+  
+          aiText += incomingChunk;
+  
+          updateActiveMessages((messages) =>
+            messages.map((message) =>
+              message.id === aiMessageId
+                ? {
+                    ...message,
+                    text: aiText,
+                  }
+                : message
+            )
           );
-
-        const cleaned =
-          chunk
-            .split("\n")
-            .map((line) => {
-              if (
-                line.startsWith(
-                  "data:"
-                )
-              ) {
-                return line
-                  .replace(
-                    /^data:\s?/,
-                    ""
-                  )
-                  .trim();
-              }
-
-              return line;
-            })
-            .filter(
-              (line) =>
-                line &&
-                line !==
-                  "[DONE]"
-            )
-            .join("\n");
-
-        if (!cleaned) continue;
-
-        aiText += cleaned;
-
-        updateActiveMessages(
-          (messages) =>
-            messages.map(
-              (message) =>
-                message.id ===
-                aiMessageId
-                  ? {
-                      ...message,
-                      text: aiText,
-                    }
-                  : message
-            )
-        );
+        }
       }
     } catch (error: any) {
-      console.log(
-        "CHAT STREAM ERROR:",
-        error
-      );
-
+      console.error("CHAT STREAM ERROR:", error);
+  
       setIsTyping(false);
-
-      updateActiveMessages(
-        (messages) => [
-          ...messages,
-          {
-            id: uid(),
-            role: "ai",
-            text:
-              "Sorry, I couldn't process that message. Please try again.",
-            time: nowLabel(),
-          },
-        ]
-      );
+  
+      updateActiveMessages((messages) => [
+        ...messages,
+        {
+          id: uid(),
+          role: "ai",
+          text: "Sorry, I couldn't process that message. Please try again.",
+          time: nowLabel(),
+        },
+      ]);
     } finally {
       setIsTyping(false);
       setIsSending(false);
@@ -1064,87 +1004,62 @@ export default function ChatScreen() {
                 </Text>
               </View>
             }
-            renderItem={({
-              item,
-            }) => {
-              const isActive =
-                item.id ===
-                activeSessionId;
-
-              const preview =
-                item.messages[
-                  item.messages
-                    .length - 1
-                ]?.text || "";
-
+            renderItem={({ item }) => {
+              const isActive = item.id === activeSessionId;
+              const messageList = item.messages || [];
+              const lastMessage = messageList[messageList.length - 1];
+            
+              // If the active chat is streaming or typing and has no AI response yet:
+              const isCurrentlyActiveAndTyping = isActive && isTyping;
+              
+              const preview = isCurrentlyActiveAndTyping
+                ? "Typing..."
+                : lastMessage?.text?.trim() || "No messages yet";
+            
               return (
                 <TouchableOpacity
                   style={[
                     styles.sessionItem,
-                    isActive &&
-                      styles.sessionItemActive,
+                    isActive && styles.sessionItemActive,
                   ]}
-                  onPress={() =>
-                    handleSelectSession(
-                      item.id
-                    )
-                  }
+                  onPress={() => handleSelectSession(item.id)}
                   activeOpacity={0.75}
                 >
                   <View
                     style={[
                       styles.sessionIcon,
-                      isActive &&
-                        styles.sessionIconActive,
+                      isActive && styles.sessionIconActive,
                     ]}
                   >
                     <Ionicons
                       name="chatbubble-outline"
                       size={17}
-                      color={
-                        isActive
-                          ? NAVY
-                          : MUTED
-                      }
+                      color={isActive ? NAVY : MUTED}
                     />
                   </View>
-
-                  <View
-                    style={
-                      styles.sessionContent
-                    }
-                  >
+            
+                  <View style={styles.sessionContent}>
                     <Text
                       style={[
                         styles.sessionTitle,
-                        isActive &&
-                          styles.sessionTitleActive,
+                        isActive && styles.sessionTitleActive,
                       ]}
                       numberOfLines={1}
                     >
-                      {item.title}
+                      {item.title || "New Chat"}
                     </Text>
-
+            
                     <Text
-                      style={
-                        styles.sessionPreview
-                      }
+                      style={styles.sessionPreview}
                       numberOfLines={1}
                     >
-                      {preview ||
-                        "No messages yet"}
+                      {preview}
                     </Text>
                   </View>
-
+            
                   <TouchableOpacity
-                    style={
-                      styles.deleteButton
-                    }
-                    onPress={() =>
-                      handleDeleteSession(
-                        item.id
-                      )
-                    }
+                    style={styles.deleteButton}
+                    onPress={() => handleDeleteSession(item.id)}
                   >
                     <Ionicons
                       name="trash-outline"
