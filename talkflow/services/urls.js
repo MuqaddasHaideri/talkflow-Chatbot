@@ -1,4 +1,4 @@
-export const API_BASE = 'http://192.168.0.106:5000/api';
+export const API_BASE = 'http://192.168.0.113:5000/api';
 
 
 export const endpoints = {
@@ -11,5 +11,5 @@ export const endpoints = {
   deleteSession: (sessionId) => `/sessions/${sessionId}`,
 
   streamChat: (sessionId) => `/chat/${sessionId}/stream`,
-
+  updateSessionTitle: (id) => `/sessions/${id}`,
 }

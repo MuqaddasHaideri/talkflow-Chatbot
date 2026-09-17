@@ -8,7 +8,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -21,6 +20,7 @@ import { signupUserApi, loginUserApi } from '../services/apiConfig';
 import { router } from 'expo-router';
 import { useAppDispatch } from "../redux/hooks";
 import { login } from "../redux/auth";
+import { SafeAreaView } from 'react-native-safe-area-context';
 interface FloatingInputProps {
   label: string;
   value: string;

@@ -1,4 +1,3 @@
-
 import React, {
   useEffect,
   useRef,
@@ -11,7 +10,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   FlatList,
@@ -21,7 +19,7 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 import {
@@ -30,6 +28,7 @@ import {
   getSessionMessagesApi,
   deleteSessionApi,
   streamChatMessageApi,
+  updateSessionTitleApi,
 } from "../services/apiConfig";
 
 import MessageBubble from "../components/MessageBubble";
@@ -48,29 +47,38 @@ import {
   normalizeMessage,
 } from "../utils/chatHelpers";
 
-// --------------------------------------------------
-// THEME
-// --------------------------------------------------
-
 const NAVY = "#2A2C5E";
+const NAVY_DARK = "#1D1E45";
 const ACCENT = "#E8C170";
+const ACCENT_DARK = "#D9AE4F";
 const BG = "#F6F7FB";
-const AI_BUBBLE = "#EDEEF4";
+const AI_BUBBLE = "#EEEFF5";
 const WHITE = "#FFFFFF";
 const TEXT = "#1E2432";
 const MUTED = "#8D93A3";
-const BORDER = "#E8E9EF";
+const BORDER = "#EBECF2";
+const DANGER = "#E4574C";
 
 const DRAWER_WIDTH = Math.min(
   310,
-  Dimensions.get("window").width * 0.82
+  Dimensions.get("window").width * 0.84
 );
 
-// --------------------------------------------------
-// MAIN SCREEN
-// --------------------------------------------------
+const DRAWER_ANIM_MS = 260;
 
-export default function ChatScreen() {
+
+type ChatScreenProps = {
+
+  onLogout?: () => Promise<void> | void;
+  userName?: string;
+  userEmail?: string;
+};
+
+export default function ChatScreen({
+  onLogout,
+  userName = "You",
+  userEmail,
+}: ChatScreenProps) {
   const [sessions, setSessions] =
     useState<Session[]>([]);
 
@@ -92,11 +100,21 @@ export default function ChatScreen() {
   const [drawerOpen, setDrawerOpen] =
     useState(false);
 
+  const [isLoggingOut, setIsLoggingOut] =
+    useState(false);
+
+  const [drawerVisible, setDrawerVisible] =
+    useState(false);
+
   const drawerAnim =
     useRef(new Animated.Value(0)).current;
 
   const listRef =
     useRef<FlatList>(null);
+
+
+  const abortControllerRef =
+    useRef<AbortController | null>(null);
 
   // ------------------------------------------------
   // ACTIVE SESSION
@@ -109,20 +127,29 @@ export default function ChatScreen() {
         activeSessionId
     );
 
+  const activeMessages: Message[] =
+    activeSession?.messages || [];
+
   // ------------------------------------------------
   // DRAWER
   // ------------------------------------------------
 
-  const toggleDrawer = (
-    open: boolean
-  ) => {
+  const toggleDrawer = (open: boolean) => {
+    if (open) {
+      setDrawerVisible(true);
+    }
+
     setDrawerOpen(open);
 
     Animated.timing(drawerAnim, {
       toValue: open ? 1 : 0,
-      duration: 260,
+      duration: DRAWER_ANIM_MS,
       useNativeDriver: true,
-    }).start();
+    }).start(({ finished }) => {
+      if (finished && !open) {
+        setDrawerVisible(false);
+      }
+    });
   };
 
   const drawerTranslateX =
@@ -159,9 +186,11 @@ export default function ChatScreen() {
             [];
 
       const normalized =
-        rawSessions.map(
-          normalizeSession
-        );
+        rawSessions.map((raw: any) => ({
+          ...normalizeSession(raw),
+          messages:
+            normalizeSession(raw).messages || [],
+        }));
 
       setSessions(normalized);
 
@@ -245,6 +274,10 @@ export default function ChatScreen() {
 
   useEffect(() => {
     loadSessions();
+
+    return () => {
+      abortControllerRef.current?.abort();
+    };
   }, []);
 
   // ------------------------------------------------
@@ -254,6 +287,13 @@ export default function ChatScreen() {
   const handleSelectSession = async (
     sessionId: string
   ) => {
+    if (sessionId === activeSessionId) {
+      toggleDrawer(false);
+      return;
+    }
+
+    abortControllerRef.current?.abort();
+
     setActiveSessionId(
       sessionId
     );
@@ -275,16 +315,16 @@ export default function ChatScreen() {
         await createSessionApi(
           "New Chat"
         );
-console.log("Response ===============",response)
+
       const rawSession =
         response?.session ||
         response?.data ||
         response;
 
-      const newSession =
-        normalizeSession(
-          rawSession
-        );
+      const newSession = {
+        ...normalizeSession(rawSession),
+        messages: [],
+      };
 
       setSessions((previous) => [
         newSession,
@@ -338,38 +378,26 @@ console.log("Response ===============",response)
                 sessionId
               );
 
-              const remaining =
-                sessions.filter(
-                  (session) =>
-                    session.id !==
-                    sessionId
+              if (activeSessionId === sessionId) {
+                abortControllerRef.current?.abort();
+              }
+
+              setSessions((previous) => {
+                const remaining = previous.filter(
+                  (session) => session.id !== sessionId
                 );
 
-              setSessions(
-                remaining
-              );
-
-              if (
-                activeSessionId ===
-                sessionId
-              ) {
-                if (
-                  remaining.length >
-                  0
-                ) {
-                  setActiveSessionId(
-                    remaining[0].id
-                  );
-
-                  await loadMessages(
-                    remaining[0].id
-                  );
-                } else {
-                  setActiveSessionId(
-                    null
-                  );
+                if (activeSessionId === sessionId) {
+                  if (remaining.length > 0) {
+                    setActiveSessionId(remaining[0].id);
+                    loadMessages(remaining[0].id);
+                  } else {
+                    setActiveSessionId(null);
+                  }
                 }
-              }
+
+                return remaining;
+              });
             } catch (error: any) {
               Alert.alert(
                 "Delete failed",
@@ -384,17 +412,53 @@ console.log("Response ===============",response)
   };
 
   // ------------------------------------------------
+  // LOGOUT
+  // ------------------------------------------------
+
+  const handleLogout = () => {
+    Alert.alert(
+      "Log out?",
+      "You'll need to sign in again to access your conversations.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Log out",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setIsLoggingOut(true);
+              abortControllerRef.current?.abort();
+              await onLogout?.();
+            } catch (error: any) {
+              console.error("LOGOUT ERROR:", error);
+              Alert.alert(
+                "Could not log out",
+                error?.message || "Something went wrong."
+              );
+            } finally {
+              setIsLoggingOut(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // ------------------------------------------------
   // UPDATE MESSAGES
   // ------------------------------------------------
   const updateActiveMessages = (
     updater: (messages: Message[]) => Message[]
   ) => {
     if (!activeSessionId) return;
-  
+
     setSessions((previous) =>
       previous.map((session) => {
         if (session.id !== activeSessionId) return session;
-  
+
         const updatedMessages = updater(session.messages || []);
         return {
           ...session,
@@ -403,122 +467,245 @@ console.log("Response ===============",response)
       })
     );
   };
+
+  // ------------------------------------------------
+  // UPDATE SESSION TITLE
+  // ------------------------------------------------
+
+
+const handleUpdateSessionTitle = async (
+  sessionId: string,
+  newTitle: string
+) => {
+  try {
+    await updateSessionTitleApi(
+      sessionId,
+      newTitle
+    );
+
+    setSessions((previous) =>
+      previous.map((session) =>
+        session.id === sessionId
+          ? {
+              ...session,
+              title: newTitle,
+            }
+          : session
+      )
+    );
+  } catch (error: any) {
+    console.error(
+      "UPDATE SESSION TITLE ERROR:",
+      error
+    );
+
+    setSessions((previous) =>
+      previous.map((session) =>
+        session.id === sessionId
+          ? {
+              ...session,
+              title: newTitle,
+            }
+          : session
+      )
+    );
+  }
+};
+
   // ------------------------------------------------
   // STREAM CHAT
   // ------------------------------------------------
 
   const handleSend = async () => {
     const text = input.trim();
-  
-    if (!text || !activeSessionId || isSending) {
+
+    if (
+      !text ||
+      !activeSessionId ||
+      isSending
+    ) {
       return;
     }
-  
+
+    const sessionIdAtSend = activeSessionId;
+
     const userMessage: Message = {
       id: uid(),
       role: "user",
       text,
       time: nowLabel(),
     };
-  
-    updateActiveMessages((messages) => [...messages, userMessage]);
-  
-    setSessions((previous) =>
-      previous.map((session) =>
-        session.id === activeSessionId && session.title === "New Chat"
-          ? { ...session, title: shortenTitle(text) }
-          : session
-      )
-    );
-  
+
+    updateActiveMessages((messages) => [
+      ...messages,
+      userMessage,
+    ]);
+
     setInput("");
     setIsSending(true);
     setIsTyping(true);
-  
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    let reader:
+      | ReadableStreamDefaultReader<Uint8Array>
+      | undefined;
+
     try {
-      const response = await streamChatMessageApi(activeSessionId, text);
-  
-      if (!response.body) {
-        throw new Error("Streaming is not supported by this response.");
+      // --------------------------------------------
+      // UPDATE TITLE FOR NEW CHAT
+      // --------------------------------------------
+
+      if (
+        activeSession?.title === "New Chat"
+      ) {
+        const newTitle =
+          shortenTitle(text);
+
+        await handleUpdateSessionTitle(
+          sessionIdAtSend,
+          newTitle
+        );
       }
-  
-      const reader = response.body.getReader();
+
+      // --------------------------------------------
+      // SEND MESSAGE
+      // --------------------------------------------
+
+      const response =
+        await streamChatMessageApi(
+          sessionIdAtSend,
+          text,
+          { signal: controller.signal }
+        );
+
+      if (!response.body) {
+        throw new Error(
+          "Streaming is not supported by this response."
+        );
+      }
+
+      reader = response.body.getReader();
+
       const decoder = new TextDecoder();
+
       const aiMessageId = uid();
-  
+
       let aiText = "";
       let buffer = "";
-  
-      updateActiveMessages((messages) => [
-        ...messages,
-        {
-          id: aiMessageId,
-          role: "ai",
-          text: "",
-          time: nowLabel(),
-        },
-      ]);
-  
+
+      // Add empty AI message
+      updateActiveMessages(
+        (messages) => [
+          ...messages,
+          {
+            id: aiMessageId,
+            role: "ai",
+            text: "",
+            time: nowLabel(),
+          },
+        ]
+      );
+
       setIsTyping(false);
-  
+
+      // --------------------------------------------
+      // STREAM RESPONSE
+      // --------------------------------------------
+
       while (true) {
+        if (controller.signal.aborted) break;
+
         const { done, value } = await reader.read();
+
         if (done) break;
-  
-        buffer += decoder.decode(value, { stream: true });
+
+        buffer += decoder.decode(
+          value,
+          { stream: true }
+        );
+
         const lines = buffer.split("\n");
-  
-        // Retain the trailing incomplete segment in the buffer
+
+        // Keep incomplete line
         buffer = lines.pop() ?? "";
-  
+
         for (const rawLine of lines) {
           const line = rawLine.trim();
-          if (!line || !line.startsWith("data:")) continue;
-  
-          const dataContent = line.replace(/^data:\s*/, "").trim();
-          if (dataContent === "[DONE]") continue;
-  
+
+          if (
+            !line ||
+            !line.startsWith("data:")
+          ) {
+            continue;
+          }
+
+          const dataContent = line
+            .replace(/^data:\s*/, "")
+            .trim();
+
+          if (dataContent === "[DONE]") {
+            continue;
+          }
+
           let incomingChunk = "";
-  
+
           try {
             const parsed = JSON.parse(dataContent);
             incomingChunk = parsed.text ?? "";
           } catch {
-            // Fallback if the payload was emitted as plain text
             incomingChunk = dataContent;
           }
-  
+
           if (!incomingChunk) continue;
-  
+
           aiText += incomingChunk;
-  
+
           updateActiveMessages((messages) =>
             messages.map((message) =>
               message.id === aiMessageId
-                ? {
-                    ...message,
-                    text: aiText,
-                  }
+                ? { ...message, text: aiText }
                 : message
             )
           );
         }
       }
     } catch (error: any) {
-      console.error("CHAT STREAM ERROR:", error);
-  
+      if (error?.name === "AbortError") {
+        return;
+      }
+
+      console.error(
+        "CHAT STREAM ERROR:",
+        error
+      );
+
       setIsTyping(false);
-  
-      updateActiveMessages((messages) => [
-        ...messages,
-        {
-          id: uid(),
-          role: "ai",
-          text: "Sorry, I couldn't process that message. Please try again.",
-          time: nowLabel(),
-        },
-      ]);
+
+      updateActiveMessages(
+        (messages) => [
+          ...messages,
+          {
+            id: uid(),
+            role: "ai",
+            text:
+              "Sorry, I couldn't process that message. Please try again.",
+            time: nowLabel(),
+          },
+        ]
+      );
     } finally {
+      try {
+        reader?.releaseLock();
+      } catch {
+        // no-op — already released or never acquired
+      }
+
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+
       setIsTyping(false);
       setIsSending(false);
     }
@@ -535,7 +722,7 @@ console.log("Response ===============",response)
       });
     });
   }, [
-    activeSession?.messages.length,
+    activeMessages.length,
     isTyping,
   ]);
 
@@ -591,7 +778,6 @@ console.log("Response ===============",response)
     <SafeAreaView
       style={styles.safeArea}
     >
-      {/* HEADER */}
 
       <View style={styles.header}>
         <TouchableOpacity
@@ -599,10 +785,11 @@ console.log("Response ===============",response)
           onPress={() =>
             toggleDrawer(true)
           }
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Ionicons
             name="menu-outline"
-            size={25}
+            size={24}
             color={NAVY}
           />
         </TouchableOpacity>
@@ -628,7 +815,7 @@ console.log("Response ===============",response)
             <Text
               style={styles.statusText}
             >
-              AI assistant
+              {isTyping ? "Thinking…" : "AI assistant"}
             </Text>
           </View>
         </View>
@@ -641,10 +828,11 @@ console.log("Response ===============",response)
           onPress={
             handleNewSession
           }
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Ionicons
             name="add"
-            size={23}
+            size={22}
             color={NAVY}
           />
         </TouchableOpacity>
@@ -668,9 +856,7 @@ console.log("Response ===============",response)
         {activeSession ? (
           <FlatList
             ref={listRef}
-            data={
-              activeSession.messages
-            }
+            data={activeMessages}
             keyExtractor={(item) =>
               item.id
             }
@@ -684,6 +870,7 @@ console.log("Response ===============",response)
             contentContainerStyle={
               styles.messagesContent
             }
+            keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
               <View
                 style={
@@ -697,7 +884,7 @@ console.log("Response ===============",response)
                 >
                   <Ionicons
                     name="sparkles"
-                    size={30}
+                    size={28}
                     color={NAVY}
                   />
                 </View>
@@ -715,9 +902,7 @@ console.log("Response ===============",response)
                     styles.emptySubtitle
                   }
                 >
-                  Ask me anything and
-                  let's figure it out
-                  together.
+                  Ask me anything and let's figure it out together.
                 </Text>
               </View>
             }
@@ -739,7 +924,7 @@ console.log("Response ===============",response)
             >
               <Ionicons
                 name="chatbubbles-outline"
-                size={30}
+                size={28}
                 color={NAVY}
               />
             </View>
@@ -750,6 +935,10 @@ console.log("Response ===============",response)
               Start a conversation
             </Text>
 
+            <Text style={styles.emptySubtitle}>
+              Your chats will show up here once you begin.
+            </Text>
+
             <TouchableOpacity
               style={
                 styles.startButton
@@ -757,10 +946,11 @@ console.log("Response ===============",response)
               onPress={
                 handleNewSession
               }
+              activeOpacity={0.85}
             >
               <Ionicons
                 name="add"
-                size={19}
+                size={18}
                 color={WHITE}
               />
 
@@ -815,6 +1005,7 @@ console.log("Response ===============",response)
                 isSending ||
                 !activeSession
               }
+              activeOpacity={0.85}
             >
               {isSending ? (
                 <ActivityIndicator
@@ -824,7 +1015,7 @@ console.log("Response ===============",response)
               ) : (
                 <Ionicons
                   name="arrow-up"
-                  size={20}
+                  size={19}
                   color={WHITE}
                 />
               )}
@@ -834,245 +1025,285 @@ console.log("Response ===============",response)
           <Text
             style={styles.inputHint}
           >
-            TalkFlow can make mistakes.
-            Check important information.
+            TalkFlow can make mistakes. Check important information.
           </Text>
         </View>
       </KeyboardAvoidingView>
 
-      {/* OVERLAY */}
+      {/* OVERLAY + DRAWER (stay mounted through the close animation) */}
 
-      {drawerOpen && (
-        <Pressable
-          style={
-            StyleSheet.absoluteFill
-          }
-          onPress={() =>
-            toggleDrawer(false)
-          }
-        >
+      {drawerVisible && (
+        <>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => toggleDrawer(false)}
+          >
+            <Animated.View
+              style={[
+                styles.overlay,
+                { opacity: overlayOpacity },
+              ]}
+            />
+          </Pressable>
+
           <Animated.View
             style={[
-              styles.overlay,
+              styles.drawer,
               {
-                opacity:
-                  overlayOpacity,
+                transform: [
+                  { translateX: drawerTranslateX },
+                ],
               },
             ]}
-          />
-        </Pressable>
-      )}
-
-      {/* DRAWER */}
-
-      <Animated.View
-        style={[
-          styles.drawer,
-          {
-            transform: [
-              {
-                translateX:
-                  drawerTranslateX,
-              },
-            ],
-          },
-        ]}
-      >
-        <SafeAreaView
-          style={styles.flexOne}
-        >
-          <View
-            style={styles.drawerHeader}
           >
-            <View>
-              <Text
-                style={
-                  styles.drawerTitle
-                }
-              >
-                Conversations
-              </Text>
-
-              <Text
-                style={
-                  styles.drawerSubtitle
-                }
-              >
-                {sessions.length}{" "}
-                {sessions.length ===
-                1
-                  ? "chat"
-                  : "chats"}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={
-                styles.closeButton
-              }
-              onPress={() =>
-                toggleDrawer(false)
-              }
+            <SafeAreaView
+              style={styles.flexOne}
             >
-              <Ionicons
-                name="close"
-                size={22}
-                color={NAVY}
-              />
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            style={styles.newChatButton}
-            onPress={
-              handleNewSession
-            }
-          >
-            <View
-              style={
-                styles.newChatIcon
-              }
-            >
-              <Ionicons
-                name="add"
-                size={20}
-                color={NAVY}
-              />
-            </View>
-
-            <View
-              style={
-                styles.newChatTextContainer
-              }
-            >
-              <Text
-                style={
-                  styles.newChatTitle
-                }
-              >
-                New conversation
-              </Text>
-
-              <Text
-                style={
-                  styles.newChatSubtitle
-                }
-              >
-                Start something new
-              </Text>
-            </View>
-
-            <Ionicons
-              name="chevron-forward"
-              size={18}
-              color={MUTED}
-            />
-          </TouchableOpacity>
-
-          <Text
-            style={styles.sectionLabel}
-          >
-            RECENT CHATS
-          </Text>
-
-          <FlatList
-            data={sessions}
-            keyExtractor={(item) =>
-              item.id
-            }
-            contentContainerStyle={{
-              paddingBottom: 30,
-            }}
-            ListEmptyComponent={
               <View
-                style={
-                  styles.drawerEmpty
-                }
+                style={styles.drawerHeader}
               >
-                <Ionicons
-                  name="chatbubble-ellipses-outline"
-                  size={30}
-                  color="#B4B8C5"
-                />
+                <View>
+                  <Text
+                    style={
+                      styles.drawerTitle
+                    }
+                  >
+                    Conversations
+                  </Text>
 
-                <Text
+                  <Text
+                    style={
+                      styles.drawerSubtitle
+                    }
+                  >
+                    {sessions.length}{" "}
+                    {sessions.length === 1
+                      ? "chat"
+                      : "chats"}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
                   style={
-                    styles.drawerEmptyTitle
+                    styles.closeButton
+                  }
+                  onPress={() =>
+                    toggleDrawer(false)
+                  }
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons
+                    name="close"
+                    size={20}
+                    color={NAVY}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={styles.newChatButton}
+                onPress={
+                  handleNewSession
+                }
+                activeOpacity={0.85}
+              >
+                <View
+                  style={
+                    styles.newChatIcon
                   }
                 >
-                  No conversations yet
-                </Text>
-              </View>
-            }
-            renderItem={({ item }) => {
-              const isActive = item.id === activeSessionId;
-              const messageList = item.messages || [];
-              const lastMessage = messageList[messageList.length - 1];
-            
-              // If the active chat is streaming or typing and has no AI response yet:
-              const isCurrentlyActiveAndTyping = isActive && isTyping;
-              
-              const preview = isCurrentlyActiveAndTyping
-                ? "Typing..."
-                : lastMessage?.text?.trim() || "No messages yet";
-            
-              return (
-                <TouchableOpacity
-                  style={[
-                    styles.sessionItem,
-                    isActive && styles.sessionItemActive,
-                  ]}
-                  onPress={() => handleSelectSession(item.id)}
-                  activeOpacity={0.75}
+                  <Ionicons
+                    name="add"
+                    size={19}
+                    color={NAVY}
+                  />
+                </View>
+
+                <View
+                  style={
+                    styles.newChatTextContainer
+                  }
                 >
-                  <View
-                    style={[
-                      styles.sessionIcon,
-                      isActive && styles.sessionIconActive,
-                    ]}
+                  <Text
+                    style={
+                      styles.newChatTitle
+                    }
                   >
-                    <Ionicons
-                      name="chatbubble-outline"
-                      size={17}
-                      color={isActive ? NAVY : MUTED}
-                    />
-                  </View>
-            
-                  <View style={styles.sessionContent}>
-                    <Text
-                      style={[
-                        styles.sessionTitle,
-                        isActive && styles.sessionTitleActive,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {item.title || "New Chat"}
-                    </Text>
-            
-                    <Text
-                      style={styles.sessionPreview}
-                      numberOfLines={1}
-                    >
-                      {preview}
-                    </Text>
-                  </View>
-            
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => handleDeleteSession(item.id)}
+                    New conversation
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.newChatSubtitle
+                    }
                   >
+                    Start something new
+                  </Text>
+                </View>
+
+                <Ionicons
+                  name="chevron-forward"
+                  size={17}
+                  color={MUTED}
+                />
+              </TouchableOpacity>
+
+              <Text
+                style={styles.sectionLabel}
+              >
+                RECENT CHATS
+              </Text>
+
+              <View style={styles.sessionListWrap}>
+                <FlatList
+                  data={sessions}
+                  keyExtractor={(item) =>
+                    item.id
+                  }
+                  contentContainerStyle={{
+                    paddingBottom: 14,
+                  }}
+                  keyboardShouldPersistTaps="handled"
+                  ListEmptyComponent={
+                    <View
+                      style={
+                        styles.drawerEmpty
+                      }
+                    >
+                      <Ionicons
+                        name="chatbubble-ellipses-outline"
+                        size={28}
+                        color="#B4B8C5"
+                      />
+
+                      <Text
+                        style={
+                          styles.drawerEmptyTitle
+                        }
+                      >
+                        No conversations yet
+                      </Text>
+                    </View>
+                  }
+                  renderItem={({ item }) => {
+                    const isActive = item.id === activeSessionId;
+                    const messageList = item.messages || [];
+                    const lastMessage = messageList[messageList.length - 1];
+
+                    const isCurrentlyActiveAndTyping = isActive && isTyping;
+
+                    const preview = isCurrentlyActiveAndTyping
+                      ? "Typing..."
+                      : lastMessage?.text?.trim() || "No messages yet";
+
+                    return (
+                      <TouchableOpacity
+                        style={[
+                          styles.sessionItem,
+                          isActive && styles.sessionItemActive,
+                        ]}
+                        onPress={() => handleSelectSession(item.id)}
+                        activeOpacity={0.75}
+                      >
+                        <View
+                          style={[
+                            styles.sessionIcon,
+                            isActive && styles.sessionIconActive,
+                          ]}
+                        >
+                          <Ionicons
+                            name="chatbubble-outline"
+                            size={16}
+                            color={isActive ? NAVY : MUTED}
+                          />
+                        </View>
+
+                        <View style={styles.sessionContent}>
+                          <Text
+                            style={[
+                              styles.sessionTitle,
+                              isActive && styles.sessionTitleActive,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {item.title || "New Chat"}
+                          </Text>
+
+                          <Text
+                            style={styles.sessionPreview}
+                            numberOfLines={1}
+                          >
+                            {preview}
+                          </Text>
+                        </View>
+
+                        <TouchableOpacity
+                          style={styles.deleteButton}
+                          onPress={() => handleDeleteSession(item.id)}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        >
+                          <Ionicons
+                            name="trash-outline"
+                            size={16}
+                            color={DANGER}
+                          />
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    );
+                  }}
+                />
+              </View>
+
+              {/* FOOTER: profile + logout, pinned to the bottom */}
+
+              <View style={styles.drawerFooter}>
+                <View style={styles.drawerDivider} />
+
+                <View style={styles.profileRow}>
+                  <View style={styles.avatarCircle}>
+                    <Text style={styles.avatarInitial}>
+                      {userName?.trim()?.[0]?.toUpperCase() || "U"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.profileTextContainer}>
+                    <Text style={styles.profileName} numberOfLines={1}>
+                      {userName}
+                    </Text>
+
+                    {!!userEmail && (
+                      <Text style={styles.profileEmail} numberOfLines={1}>
+                        {userEmail}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.logoutButton}
+                  onPress={handleLogout}
+                  activeOpacity={0.75}
+                  disabled={isLoggingOut}
+                >
+                  {isLoggingOut ? (
+                    <ActivityIndicator size="small" color={DANGER} />
+                  ) : (
                     <Ionicons
-                      name="trash-outline"
-                      size={17}
-                      color="#A5A9B5"
+                      name="log-out-outline"
+                      size={18}
+                      color={DANGER}
                     />
-                  </TouchableOpacity>
+                  )}
+
+                  <Text style={styles.logoutButtonText}>
+                    {isLoggingOut ? "Logging out…" : "Log out"}
+                  </Text>
                 </TouchableOpacity>
-              );
-            }}
-          />
-        </SafeAreaView>
-      </Animated.View>
+              </View>
+            </SafeAreaView>
+          </Animated.View>
+        </>
+      )}
     </SafeAreaView>
   );
 }
@@ -1089,19 +1320,25 @@ const styles = StyleSheet.create({
   // HEADER
 
   header: {
-    height: 64,
+    height: 62,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     backgroundColor: WHITE,
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
+
+    shadowColor: "#0C0E1E",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
   },
 
   headerButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1114,14 +1351,15 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
   },
 
   headerTitle: {
     fontSize: 16,
     fontWeight: "700",
     color: TEXT,
-    maxWidth: "85%",
+    maxWidth: "90%",
+    letterSpacing: -0.2,
   },
 
   statusRow: {
@@ -1148,101 +1386,9 @@ const styles = StyleSheet.create({
 
   messagesContent: {
     paddingHorizontal: 14,
-    paddingTop: 20,
+    paddingTop: 18,
     paddingBottom: 18,
     flexGrow: 1,
-  },
-
-  messageContainer: {
-    flexDirection: "row",
-    marginBottom: 14,
-    alignItems: "flex-end",
-  },
-
-  messageLeft: {
-    justifyContent: "flex-start",
-  },
-
-  messageRight: {
-    justifyContent: "flex-end",
-  },
-
-  aiAvatar: {
-    width: 29,
-    height: 29,
-    borderRadius: 10,
-    backgroundColor: "#E5E6EF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 7,
-  },
-
-  bubble: {
-    maxWidth: "78%",
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingTop: 11,
-    paddingBottom: 8,
-  },
-
-  bubbleUser: {
-    backgroundColor: NAVY,
-    borderBottomRightRadius: 5,
-  },
-
-  bubbleAi: {
-    backgroundColor: AI_BUBBLE,
-    borderBottomLeftRadius: 5,
-  },
-
-  bubbleTextUser: {
-    color: WHITE,
-    fontSize: 14.5,
-    lineHeight: 21,
-  },
-
-  bubbleTextAi: {
-    color: TEXT,
-    fontSize: 14.5,
-    lineHeight: 21,
-  },
-
-  messageTime: {
-    fontSize: 9.5,
-    color: "#9B9FAC",
-    marginTop: 5,
-    alignSelf: "flex-end",
-  },
-
-  messageTimeUser: {
-    color: "rgba(255,255,255,0.6)",
-  },
-
-  // TYPING
-
-  typingRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    marginBottom: 14,
-  },
-
-  typingBubble: {
-    height: 40,
-    minWidth: 65,
-    borderRadius: 18,
-    borderBottomLeftRadius: 5,
-    backgroundColor: AI_BUBBLE,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  typingDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#9095A5",
-    marginHorizontal: 3,
   },
 
   // EMPTY STATE
@@ -1252,24 +1398,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 35,
-    paddingTop: 80,
+    paddingTop: 70,
   },
 
   emptyIcon: {
-    width: 66,
-    height: 66,
-    borderRadius: 22,
-    backgroundColor: "#E7E8F0",
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: "#E9EAF2",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 18,
+    marginBottom: 16,
   },
 
   emptyTitle: {
-    fontSize: 21,
+    fontSize: 20,
     fontWeight: "700",
     color: TEXT,
     textAlign: "center",
+    letterSpacing: -0.3,
   },
 
   emptySubtitle: {
@@ -1277,24 +1424,32 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: MUTED,
     textAlign: "center",
-    marginTop: 8,
+    marginTop: 7,
+    maxWidth: 260,
   },
 
   noSession: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 24,
   },
 
   startButton: {
-    marginTop: 22,
+    marginTop: 20,
     height: 46,
-    paddingHorizontal: 20,
+    paddingHorizontal: 22,
     borderRadius: 14,
     backgroundColor: NAVY,
     flexDirection: "row",
     alignItems: "center",
     gap: 7,
+
+    shadowColor: NAVY,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
   },
 
   startButtonText: {
@@ -1321,11 +1476,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     backgroundColor: "#F1F2F6",
-    borderRadius: 23,
-    paddingLeft: 15,
+    borderRadius: 24,
+    paddingLeft: 16,
     paddingRight: 5,
     paddingVertical: 5,
     minHeight: 52,
+    borderWidth: 1,
+    borderColor: "#E9EAF1",
   },
 
   textInput: {
@@ -1347,10 +1504,18 @@ const styles = StyleSheet.create({
     backgroundColor: NAVY,
     alignItems: "center",
     justifyContent: "center",
+
+    shadowColor: NAVY,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 2,
   },
 
   sendButtonDisabled: {
     backgroundColor: "#C8CAD4",
+    shadowOpacity: 0,
+    elevation: 0,
   },
 
   inputHint: {
@@ -1389,17 +1554,18 @@ const styles = StyleSheet.create({
 
   drawerHeader: {
     paddingHorizontal: 18,
-    paddingTop: 12,
-    paddingBottom: 16,
+    paddingTop: 10,
+    paddingBottom: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
 
   drawerTitle: {
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: "800",
     color: TEXT,
+    letterSpacing: -0.3,
   },
 
   drawerSubtitle: {
@@ -1409,9 +1575,9 @@ const styles = StyleSheet.create({
   },
 
   closeButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 11,
     backgroundColor: "#F1F2F6",
     alignItems: "center",
     justifyContent: "center",
@@ -1424,11 +1590,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#F4F3F8",
     flexDirection: "row",
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#ECEAF3",
   },
 
   newChatIcon: {
-    width: 39,
-    height: 39,
+    width: 38,
+    height: 38,
     borderRadius: 12,
     backgroundColor: ACCENT,
     alignItems: "center",
@@ -1458,8 +1626,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     color: "#A0A4B2",
     marginHorizontal: 18,
-    marginTop: 24,
-    marginBottom: 8,
+    marginTop: 22,
+    marginBottom: 6,
+  },
+
+  sessionListWrap: {
+    flex: 1,
   },
 
   sessionItem: {
@@ -1478,8 +1650,8 @@ const styles = StyleSheet.create({
   },
 
   sessionIcon: {
-    width: 37,
-    height: 37,
+    width: 36,
+    height: 36,
     borderRadius: 11,
     backgroundColor: "#F3F4F7",
     alignItems: "center",
@@ -1503,7 +1675,7 @@ const styles = StyleSheet.create({
 
   sessionTitleActive: {
     color: NAVY,
-    fontWeight: "750",
+    fontWeight: "800",
   },
 
   sessionPreview: {
@@ -1531,7 +1703,6 @@ const styles = StyleSheet.create({
   },
 
 
-
   loadingScreen: {
     flex: 1,
     alignItems: "center",
@@ -1539,19 +1710,26 @@ const styles = StyleSheet.create({
   },
 
   logoCircle: {
-    width: 70,
-    height: 70,
-    borderRadius: 24,
+    width: 68,
+    height: 68,
+    borderRadius: 22,
     backgroundColor: NAVY,
     alignItems: "center",
     justifyContent: "center",
+
+    shadowColor: NAVY,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 4,
   },
 
   loadingTitle: {
-    fontSize: 25,
+    fontSize: 24,
     fontWeight: "800",
     color: TEXT,
     marginTop: 15,
+    letterSpacing: -0.4,
   },
 
   loadingSubtitle: {
@@ -1560,4 +1738,3 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 });
-

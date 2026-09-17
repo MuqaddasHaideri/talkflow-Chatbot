@@ -1,22 +1,31 @@
-import {mongoose} from "mongoose"
+import mongoose from "mongoose";
 
-const chatSession = new mongoose.Schema ({
-
+const chatSession = new mongoose.Schema(
+  {
     userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'users',
-        required: true,
-        index: true,
-      },
-      title: {
-        type: String,
-        default: 'New Chat',
-        trim: true,
-      },
-      createdAt: {
-        type: Date,
-        default: Date.now,
-      },
-},{timestamp :true})
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "users",
+      required: true,
+      index: true,
+    },
 
-export default mongoose.model ("chatSession", chatSession)
+    title: {
+      type: String,
+      default: "New Chat",
+      trim: true,
+    },
+
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+export default mongoose.model(
+  "chatSession",
+  chatSession
+);

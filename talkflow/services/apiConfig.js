@@ -169,3 +169,16 @@ export const streamChatMessageApi = async (
 
   return response;
 };
+
+// PATCH /api/sessions/:id
+export const updateSessionTitleApi = async (sessionId, title) => {
+  return fetchApi(
+    endpoints.updateSessionTitle(sessionId),
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        title,
+      }),
+    }
+  );
+};
