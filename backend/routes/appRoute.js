@@ -11,11 +11,11 @@ import {
 
 const router = Router();
 
-router.use(isAuthenticated); // Protect all session routes
+router.use(isAuthenticated); 
 
 router.get('/', getSessions);
 router.post('/', createSession);
 router.get('/:id/messages', getSessionMessages);
 router.delete('/:id', deleteSession);
-router.patch('/:id', updateSessionTitle);
+
 export default router;

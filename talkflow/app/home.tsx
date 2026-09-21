@@ -46,13 +46,11 @@ import {
   normalizeSession,
   normalizeMessage,
 } from "../utils/chatHelpers";
+import { router } from "expo-router";
 
 const NAVY = "#2A2C5E";
-const NAVY_DARK = "#1D1E45";
 const ACCENT = "#E8C170";
-const ACCENT_DARK = "#D9AE4F";
 const BG = "#F6F7FB";
-const AI_BUBBLE = "#EEEFF5";
 const WHITE = "#FFFFFF";
 const TEXT = "#1E2432";
 const MUTED = "#8D93A3";
@@ -185,12 +183,14 @@ export default function ChatScreen({
             response?.data ||
             [];
 
-      const normalized =
-        rawSessions.map((raw: any) => ({
-          ...normalizeSession(raw),
-          messages:
-            normalizeSession(raw).messages || [],
-        }));
+      const normalized = rawSessions.map((raw: any) => {
+        const session = normalizeSession(raw);
+
+        return {
+          ...session,
+          messages: session.messages || [],
+        };
+      });
 
       setSessions(normalized);
 
@@ -352,9 +352,6 @@ export default function ChatScreen({
     }
   };
 
-  // ------------------------------------------------
-  // DELETE SESSION
-  // ------------------------------------------------
 
   const handleDeleteSession = (
     sessionId: string
@@ -378,26 +375,31 @@ export default function ChatScreen({
                 sessionId
               );
 
-              if (activeSessionId === sessionId) {
+              const wasActive =
+                activeSessionId === sessionId;
+
+              if (wasActive) {
                 abortControllerRef.current?.abort();
               }
 
-              setSessions((previous) => {
-                const remaining = previous.filter(
-                  (session) => session.id !== sessionId
-                );
+              const remaining = sessions.filter(
+                (session) => session.id !== sessionId
+              );
 
-                if (activeSessionId === sessionId) {
-                  if (remaining.length > 0) {
-                    setActiveSessionId(remaining[0].id);
-                    loadMessages(remaining[0].id);
-                  } else {
-                    setActiveSessionId(null);
-                  }
+              setSessions(remaining);
+
+              if (wasActive) {
+                const nextSessionId =
+                  remaining.length > 0
+                    ? remaining[0].id
+                    : null;
+
+                setActiveSessionId(nextSessionId);
+
+                if (nextSessionId) {
+                  await loadMessages(nextSessionId);
                 }
-
-                return remaining;
-              });
+              }
             } catch (error: any) {
               Alert.alert(
                 "Delete failed",
@@ -431,7 +433,12 @@ export default function ChatScreen({
             try {
               setIsLoggingOut(true);
               abortControllerRef.current?.abort();
-              await onLogout?.();
+
+              if (onLogout) {
+                await onLogout();
+              }
+  
+              router.replace("/");
             } catch (error: any) {
               console.error("LOGOUT ERROR:", error);
               Alert.alert(
@@ -472,16 +479,13 @@ export default function ChatScreen({
   // UPDATE SESSION TITLE
   // ------------------------------------------------
 
-
-const handleUpdateSessionTitle = async (
-  sessionId: string,
-  newTitle: string
-) => {
-  try {
-    await updateSessionTitleApi(
-      sessionId,
-      newTitle
-    );
+  const handleUpdateSessionTitle = async (
+    sessionId: string,
+    newTitle: string
+  ) => {
+    const previousTitle = sessions.find(
+      (session) => session.id === sessionId
+    )?.title;
 
     setSessions((previous) =>
       previous.map((session) =>
@@ -493,24 +497,36 @@ const handleUpdateSessionTitle = async (
           : session
       )
     );
-  } catch (error: any) {
-    console.error(
-      "UPDATE SESSION TITLE ERROR:",
-      error
-    );
 
-    setSessions((previous) =>
-      previous.map((session) =>
-        session.id === sessionId
-          ? {
-              ...session,
-              title: newTitle,
-            }
-          : session
-      )
-    );
-  }
-};
+    try {
+      await updateSessionTitleApi(
+        sessionId,
+        newTitle
+      );
+    } catch (error: any) {
+      console.error(
+        "UPDATE SESSION TITLE ERROR:",
+        error
+      );
+
+      setSessions((previous) =>
+        previous.map((session) =>
+          session.id === sessionId
+            ? {
+                ...session,
+                title: previousTitle ?? session.title,
+              }
+            : session
+        )
+      );
+
+      Alert.alert(
+        "Couldn't rename chat",
+        error?.message ||
+          "The title change didn't save. Please try again."
+      );
+    }
+  };
 
   // ------------------------------------------------
   // STREAM CHAT
@@ -563,7 +579,7 @@ const handleUpdateSessionTitle = async (
         const newTitle =
           shortenTitle(text);
 
-        await handleUpdateSessionTitle(
+        handleUpdateSessionTitle(
           sessionIdAtSend,
           newTitle
         );
@@ -628,7 +644,6 @@ const handleUpdateSessionTitle = async (
 
         const lines = buffer.split("\n");
 
-        // Keep incomplete line
         buffer = lines.pop() ?? "";
 
         for (const rawLine of lines) {
@@ -1736,5 +1751,70 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     color: MUTED,
     marginTop: 5,
+  },
+
+  drawerFooter: {
+    paddingHorizontal: 14,
+  },
+
+  drawerDivider: {
+    height: 1,
+    backgroundColor: BORDER,
+    marginBottom: 12,
+  },
+
+  profileRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingBottom: 12,
+  },
+
+  avatarCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: NAVY,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  avatarInitial: {
+    color: WHITE,
+    fontWeight: "700",
+    fontSize: 15,
+  },
+
+  profileTextContainer: {
+    flex: 1,
+    marginLeft: 10,
+  },
+
+  profileName: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    color: TEXT,
+  },
+
+  profileEmail: {
+    fontSize: 11,
+    color: MUTED,
+    marginTop: 1,
+  },
+
+  logoutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "rgba(228,87,76,0.08)",
+    marginBottom: 10,
+    gap: 6,
+  },
+
+  logoutButtonText: {
+    color: DANGER,
+    fontWeight: "700",
+    fontSize: 13.5,
   },
 });
