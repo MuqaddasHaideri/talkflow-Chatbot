@@ -4,7 +4,6 @@ export const isAuthenticated = (req, res, next) => {
   try {
     // Get Authorization header
     const authHeader = req.headers.authorization;
-
     // Checking if Bearer token exists
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
