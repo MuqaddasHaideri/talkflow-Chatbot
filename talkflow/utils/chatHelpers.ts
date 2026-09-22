@@ -27,24 +27,33 @@ export const normalizeSession = (raw) => ({
 export const normalizeMessage = (
   message: any
 ): Message => {
-  const role =
-    message?.role === "user"
+  const rawRole =
+    message?.role ??
+    message?.sender ??
+    message?.type ??
+    "";
+
+  const normalizedRole = String(rawRole).toLowerCase().trim();
+
+  const role: "user" | "ai" =
+    normalizedRole === "user" ||
+    normalizedRole === "human"
       ? "user"
       : "ai";
 
   return {
     id: String(
       message?._id ||
-        message?.id ||
-        uid()
+      message?.id ||
+      uid()
     ),
 
     role,
 
     text:
-      message?.text ||
-      message?.content ||
-      message?.message ||
+      message?.text ??
+      message?.content ??
+      message?.message ??
       "",
 
     time: message?.createdAt

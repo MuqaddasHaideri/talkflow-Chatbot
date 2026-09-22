@@ -56,7 +56,7 @@ export const loginController = async (req, res) => {
     
         const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
     
-        res.json({ token, userId: user._id, email: user.email });
+        res.json({ token, userId: user._id, email: user.email, username:user.username });
       } catch (error) {
         res.status(500).json({ error: 'Server error during login.' });
       }

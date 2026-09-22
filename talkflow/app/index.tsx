@@ -111,13 +111,10 @@ export default function AuthScreen() {
   };
 
   const handleSignUp = async () => {
-    console.log('Signing up...');
-    console.log(signupUsername, signupEmail, signupPassword);
     if (!signupUsername || !signupEmail || !signupPassword) return;
     try {
       setLoading(true);
       const response = await signupUserApi(signupUsername, signupEmail, signupPassword);
-      console.log('Signed up:', response.email);
     } catch (error) {
       console.error(error); 
     } finally {
@@ -125,16 +122,13 @@ export default function AuthScreen() {
     }
   };
   const handleLogin = async () => {
-    console.log('Logging in...');
     console.log(loginEmail, loginPassword);
     if (!loginEmail || !loginPassword) return;
     try {
       setLoading(true);
       const response = await loginUserApi(loginEmail, loginPassword);
-
     const token = response.token;
-    const user = response.user;
-    console.log("token",token)
+    const user = response?.username;
     dispatch(
       login({
         token,

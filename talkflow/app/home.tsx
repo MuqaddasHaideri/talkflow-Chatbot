@@ -47,7 +47,9 @@ import {
   normalizeMessage,
 } from "../utils/chatHelpers";
 import { router } from "expo-router";
-
+import { useSelector, useDispatch } from "react-redux";
+import { RootState } from "../redux/store";
+import { logout } from "../redux/auth";
 const NAVY = "#2A2C5E";
 const ACCENT = "#E8C170";
 const BG = "#F6F7FB";
@@ -77,6 +79,11 @@ export default function ChatScreen({
   userName = "You",
   userEmail,
 }: ChatScreenProps) {
+  const dispatch = useDispatch();
+
+  const user = useSelector((state: RootState) => state.auth.user);
+  const username = user;
+  const email = user?.email || "";
   const [sessions, setSessions] =
     useState<Session[]>([]);
 
@@ -180,8 +187,8 @@ export default function ChatScreen({
         Array.isArray(response)
           ? response
           : response?.sessions ||
-            response?.data ||
-            [];
+          response?.data ||
+          [];
 
       const normalized = rawSessions.map((raw: any) => {
         const session = normalizeSession(raw);
@@ -212,7 +219,7 @@ export default function ChatScreen({
       Alert.alert(
         "Unable to load chats",
         error?.message ||
-          "Something went wrong."
+        "Something went wrong."
       );
     } finally {
       setIsLoading(false);
@@ -236,8 +243,8 @@ export default function ChatScreen({
         Array.isArray(response)
           ? response
           : response?.messages ||
-            response?.data ||
-            [];
+          response?.data ||
+          [];
 
       const messages =
         rawMessages.map(
@@ -248,9 +255,9 @@ export default function ChatScreen({
         previous.map((session) =>
           session.id === sessionId
             ? {
-                ...session,
-                messages,
-              }
+              ...session,
+              messages,
+            }
             : session
         )
       );
@@ -263,7 +270,7 @@ export default function ChatScreen({
       Alert.alert(
         "Unable to load messages",
         error?.message ||
-          "Could not load this conversation."
+        "Could not load this conversation."
       );
     }
   };
@@ -347,7 +354,7 @@ export default function ChatScreen({
       Alert.alert(
         "Could not create chat",
         error?.message ||
-          "Something went wrong."
+        "Something went wrong."
       );
     }
   };
@@ -404,7 +411,7 @@ export default function ChatScreen({
               Alert.alert(
                 "Delete failed",
                 error?.message ||
-                  "Could not delete chat."
+                "Could not delete chat."
               );
             }
           },
@@ -432,15 +439,22 @@ export default function ChatScreen({
           onPress: async () => {
             try {
               setIsLoggingOut(true);
+
+              // Stop any active AI response
               abortControllerRef.current?.abort();
 
+              // Clear Redux authentication state
+              dispatch(logout());
+
+              // Run parent's logout logic if provided
               if (onLogout) {
                 await onLogout();
               }
-  
+
               router.replace("/");
             } catch (error: any) {
               console.error("LOGOUT ERROR:", error);
+
               Alert.alert(
                 "Could not log out",
                 error?.message || "Something went wrong."
@@ -491,9 +505,9 @@ export default function ChatScreen({
       previous.map((session) =>
         session.id === sessionId
           ? {
-              ...session,
-              title: newTitle,
-            }
+            ...session,
+            title: newTitle,
+          }
           : session
       )
     );
@@ -513,9 +527,9 @@ export default function ChatScreen({
         previous.map((session) =>
           session.id === sessionId
             ? {
-                ...session,
-                title: previousTitle ?? session.title,
-              }
+              ...session,
+              title: previousTitle ?? session.title,
+            }
             : session
         )
       );
@@ -523,7 +537,7 @@ export default function ChatScreen({
       Alert.alert(
         "Couldn't rename chat",
         error?.message ||
-          "The title change didn't save. Please try again."
+        "The title change didn't save. Please try again."
       );
     }
   };
@@ -1010,7 +1024,7 @@ export default function ChatScreen({
                 (!input.trim() ||
                   isSending ||
                   !activeSession) &&
-                  styles.sendButtonDisabled,
+                styles.sendButtonDisabled,
               ]}
               onPress={
                 handleSend
@@ -1269,7 +1283,6 @@ export default function ChatScreen({
                 />
               </View>
 
-              {/* FOOTER: profile + logout, pinned to the bottom */}
 
               <View style={styles.drawerFooter}>
                 <View style={styles.drawerDivider} />
@@ -1277,13 +1290,14 @@ export default function ChatScreen({
                 <View style={styles.profileRow}>
                   <View style={styles.avatarCircle}>
                     <Text style={styles.avatarInitial}>
-                      {userName?.trim()?.[0]?.toUpperCase() || "U"}
+                      {username?.trim()?.[0]?.toUpperCase() || "U"}
                     </Text>
                   </View>
 
                   <View style={styles.profileTextContainer}>
                     <Text style={styles.profileName} numberOfLines={1}>
-                      {userName}
+                      {username || "You"}
+
                     </Text>
 
                     {!!userEmail && (
