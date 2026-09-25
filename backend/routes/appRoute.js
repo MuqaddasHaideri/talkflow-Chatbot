@@ -9,8 +9,7 @@ import {
   updateSessionTitle,
 } from '../controller/session_Controller.js';
 
-const router = Router();
-
+const router = Router();
 router.use(isAuthenticated); 
 
 router.get('/', getSessions);
