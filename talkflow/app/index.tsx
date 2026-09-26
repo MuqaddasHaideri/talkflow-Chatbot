@@ -426,11 +426,6 @@ const styles = StyleSheet.create({
   footerLink: {
     fontSize: 13,
     fontWeight: '700',
-<<<<<<< HEAD
     color: '#2A2C5E',
   },
-=======
-    color: '#FF5E7E',
-  }
->>>>>>> e5c3349585cfe393894ceb430f85277262b941d7
 });
