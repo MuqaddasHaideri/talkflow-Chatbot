@@ -186,9 +186,7 @@ export default function AuthScreen() {
                     secureTextEntry
                   />
 
-                  <TouchableOpacity style={styles.forgotPassBtn}>
-                    <Text style={styles.forgotPassText}>Forgot Password?</Text>
-                  </TouchableOpacity>
+                  
 
                   <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtnWrapper}
                   onPress={handleLogin}
@@ -360,7 +358,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   inputWrapperFocused: {
-    borderColor: '#FF5E7E',
+    borderColor: '#2A2C5E',
   },
   textInput: {
     fontSize: 14,
@@ -382,7 +380,7 @@ const styles = StyleSheet.create({
     color: '#A0AAB8',
   },
   floatingLabelTextFocused: {
-    color: '#FF5E7E',
+    color: '#2A2C5E',
   },
   forgotPassBtn: {
     alignSelf: 'flex-end',
@@ -428,6 +426,6 @@ const styles = StyleSheet.create({
   footerLink: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#FF5E7E',
+    color: '#2A2C5E',
   },
 });
