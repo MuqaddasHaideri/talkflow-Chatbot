@@ -63,8 +63,6 @@ const DRAWER_WIDTH = Math.min(
 );
 
 const DRAWER_ANIM_MS = 260;
-
-
 type ChatScreenProps = {
 
   onLogout?: () => Promise<void> | void;
