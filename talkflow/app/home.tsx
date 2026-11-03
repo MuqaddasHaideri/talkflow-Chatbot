@@ -28,15 +28,12 @@ import {
   streamChatMessageApi,
   updateSessionTitleApi,
 } from "../services/apiConfig";
-
 import MessageBubble from "../components/MessageBubble";
 import TypingIndicator from "../components/TypingIndicator";
-
 import {
   Message,
   Session,
 } from "../utils/chatTypes";
-
 import {
   nowLabel,
   uid,
@@ -48,6 +45,7 @@ import { router } from "expo-router";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "../redux/store";
 import { logout } from "../redux/auth";
+
 const NAVY = "#2A2C5E";
 const ACCENT = "#E8C170";
 const BG = "#F6F7FB";
